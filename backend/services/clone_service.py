@@ -5,8 +5,11 @@ from database import SessionLocal, Voice
 from typing import Optional
 
 class CloneService:
-    def __init__(self, clones_dir: str = "models/clones"):
-        self.clones_dir = clones_dir
+    def __init__(self):
+        # Determine paths relative to this file's location
+        # backend/services/clone_service.py -> backend/
+        self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.clones_dir = os.path.join(self.base_dir, "models", "clones")
         os.makedirs(self.clones_dir, exist_ok=True)
 
     def clone_voice(self, name: str, ref_audio_file, gender: str = "unknown", accent: str = "Northern") -> Optional[str]:

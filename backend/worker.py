@@ -27,7 +27,8 @@ def generate_voice_task(task_id: str, text: str, voice_id: str, speed: float):
         
         # If voice_id is missing from DB, we still try to generate
         gender = voice_info.gender if voice_info else "male"
-        audio_path = tts_service.generate(norm_text, voice_id, task_id, speed, gender=gender)
+        voice_name = voice_info.name if voice_info else ""
+        audio_path = tts_service.generate(norm_text, voice_id, task_id, speed, gender=gender, voice_name=voice_name)
         
         if not audio_path:
             raise Exception("Failed to generate audio with Piper TTS")
@@ -63,9 +64,10 @@ def dub_srt_task(task_id: str, srt_content: str, voice_id: str, speed: float):
         # Fetch voice metadata
         voice_info = db.query(Voice).filter(Voice.id == voice_id).first()
         gender = voice_info.gender if voice_info else "male"
+        voice_name = voice_info.name if voice_info else ""
 
         # 2. Process SRT and generate real audio using dubbing_service
-        audio_path = dubbing_service.process_srt(srt_content, voice_id, task_id, speed, gender=gender)
+        audio_path = dubbing_service.process_srt(srt_content, voice_id, task_id, speed, gender=gender, voice_name=voice_name)
         
         if not audio_path:
             raise Exception("Failed to process SRT dubbing")
