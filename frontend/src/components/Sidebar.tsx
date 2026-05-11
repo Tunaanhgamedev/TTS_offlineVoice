@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { 
   Mic2, 
   History, 
@@ -13,16 +15,18 @@ import {
 import { cn } from "@/lib/utils";
 
 const menuItems = [
-  { icon: PlusCircle, label: "Tạo mới", active: true },
-  { icon: History, label: "Lịch sử", active: false },
-  { icon: Volume2, label: "Giọng đọc", active: false },
-  { icon: LayoutDashboard, label: "Thống kê", active: false },
-  { icon: Settings, label: "Cài đặt", active: false },
+  { icon: PlusCircle, label: "Tạo mới", href: "/" },
+  { icon: History, label: "Lịch sử", href: "/history" },
+  { icon: Volume2, label: "Giọng đọc", href: "/voices" },
+  { icon: LayoutDashboard, label: "Thống kê", href: "/stats" },
+  { icon: Settings, label: "Cài đặt", href: "/settings" },
 ];
 
 export const Sidebar = () => {
+  const pathname = usePathname();
+
   return (
-    <aside className="w-64 h-screen border-r border-border bg-card/30 backdrop-blur-md flex flex-col">
+    <aside className="w-64 h-screen border-r border-border bg-card/30 backdrop-blur-md flex flex-col shrink-0">
       <div className="p-6 flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
           <Mic2 className="text-primary-foreground" size={24} />
@@ -31,23 +35,27 @@ export const Sidebar = () => {
       </div>
 
       <nav className="flex-1 px-4 py-6 space-y-2">
-        {menuItems.map((item) => (
-          <button
-            key={item.label}
-            className={cn(
-              "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
-              item.active 
-                ? "bg-primary text-primary-foreground shadow-lg shadow-primary/10" 
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-          >
-            <item.icon size={20} className={cn(
-              "transition-transform duration-200 group-hover:scale-110",
-              item.active ? "text-primary-foreground" : "text-muted-foreground group-hover:text-primary"
-            )} />
-            <span className="font-medium">{item.label}</span>
-          </button>
-        ))}
+        {menuItems.map((item) => {
+          const isActive = pathname === item.href;
+          return (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
+                isActive 
+                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/10" 
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <item.icon size={20} className={cn(
+                "transition-transform duration-200 group-hover:scale-110",
+                isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-primary"
+              )} />
+              <span className="font-medium">{item.label}</span>
+            </Link>
+          );
+        })}
       </nav>
 
       <div className="p-4 mt-auto">

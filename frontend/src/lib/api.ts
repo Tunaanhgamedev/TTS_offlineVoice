@@ -63,5 +63,25 @@ export const ttsApi = {
       headers: { "Content-Type": "multipart/form-data" }
     });
     return response.data;
+  },
+
+  getHistory: async (): Promise<HistoryItem[]> => {
+    const response = await api.get("/generations");
+    return response.data;
+  },
+
+  getStats: async (): Promise<any> => {
+    const response = await api.get("/stats");
+    return response.data;
   }
 };
+
+export interface HistoryItem {
+  id: string;
+  text: string;
+  voice_id: string;
+  status: string;
+  created_at: string;
+  audio_path?: string;
+  srt_path?: string;
+}

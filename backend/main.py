@@ -13,8 +13,10 @@ from fastapi.staticfiles import StaticFiles
 app = FastAPI(title="VietVoiceAI API")
 
 # Serve outputs
-os.makedirs("outputs", exist_ok=True)
-app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+OUTPUTS_DIR = os.path.join(BASE_DIR, "outputs")
+os.makedirs(OUTPUTS_DIR, exist_ok=True)
+app.mount("/outputs", StaticFiles(directory=OUTPUTS_DIR), name="outputs")
 
 # Initialize DB on startup
 @app.on_event("startup")
@@ -158,6 +160,38 @@ async def dub_srt(
     from worker import dub_srt_task
     background_tasks.add_task(dub_srt_task, task_id, srt_text, voice, speed)
     return GenerationResponse(id=task_id, status="queued")
+
+@app.get("/generations")
+async def get_generations(db: Session = Depends(get_db)):
+    gens = db.query(Generation).order_by(Generation.created_at.desc()).all()
+    return [
+        {
+            "id": g.id,
+            "text": g.text,
+            "voice_id": g.voice_id,
+            "status": g.status,
+            "created_at": g.created_at,
+            "audio_url": f"http://localhost:8000/outputs/{g.id}.wav" if g.status == "completed" else None,
+            "srt_url": f"http://localhost:8000/outputs/{g.id}.srt" if g.srt_path else None
+        } for g in gens
+    ]
+
+@app.get("/stats")
+async def get_stats(db: Session = Depends(get_db)):
+    total_gens = db.query(Generation).count()
+    completed_gens = db.query(Generation).filter(Generation.status == "completed").count()
+    total_voices = db.query(Voice).count()
+    
+    # Calculate total characters processed
+    all_gens = db.query(Generation).all()
+    total_chars = sum(len(g.text) for g in all_gens if g.text)
+    
+    return {
+        "total_generations": total_gens,
+        "completed_generations": completed_gens,
+        "total_voices": total_voices,
+        "total_characters": total_chars
+    }
 
 if __name__ == "__main__":
     import uvicorn

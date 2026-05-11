@@ -33,7 +33,7 @@ class DubbingService:
                     })
         return segments
 
-    def process_srt(self, srt_content: str, voice_id: str, task_id: str, speed: float = 1.0) -> str:
+    def process_srt(self, srt_content: str, voice_id: str, task_id: str, speed: float = 1.0, gender: str = "male") -> str:
         """
         Processes SRT: Generates audio for each line and merges them.
         """
@@ -49,8 +49,8 @@ class DubbingService:
         
         for i, seg in enumerate(segments):
             seg_id = f"{task_id}_seg_{i}"
-            # Generate individual segment
-            audio_path = tts_service.generate(seg['text'], voice_id, seg_id, speed)
+            # Generate individual segment with gender info for conversion
+            audio_path = tts_service.generate(seg['text'], voice_id, seg_id, speed, gender=gender)
             if audio_path:
                 segment_files.append(audio_path)
 

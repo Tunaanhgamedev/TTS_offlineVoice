@@ -1,6 +1,6 @@
 import os
 import time
-from database import SessionLocal, Generation
+from database import SessionLocal, Generation, Voice
 from services.tts_service import tts_service
 from utils.text_norm import normalize_vietnamese_text
 
@@ -22,8 +22,12 @@ def generate_voice_task(task_id: str, text: str, voice_id: str, speed: float):
         norm_text = normalize_vietnamese_text(text)
 
         # 2. Generate Audio (TTS)
-        # Using real tts_service now
-        audio_path = tts_service.generate(norm_text, voice_id, task_id, speed)
+        # Fetch voice metadata to apply correct conversion
+        voice_info = db.query(Voice).filter(Voice.id == voice_id).first()
+        
+        # If voice_id is missing from DB, we still try to generate
+        gender = voice_info.gender if voice_info else "male"
+        audio_path = tts_service.generate(norm_text, voice_id, task_id, speed, gender=gender)
         
         if not audio_path:
             raise Exception("Failed to generate audio with Piper TTS")
@@ -56,8 +60,12 @@ def dub_srt_task(task_id: str, srt_content: str, voice_id: str, speed: float):
         generation.status = "processing"
         db.commit()
 
+        # Fetch voice metadata
+        voice_info = db.query(Voice).filter(Voice.id == voice_id).first()
+        gender = voice_info.gender if voice_info else "male"
+
         # 2. Process SRT and generate real audio using dubbing_service
-        audio_path = dubbing_service.process_srt(srt_content, voice_id, task_id, speed)
+        audio_path = dubbing_service.process_srt(srt_content, voice_id, task_id, speed, gender=gender)
         
         if not audio_path:
             raise Exception("Failed to process SRT dubbing")
