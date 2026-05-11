@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+
+# Next.js / Node
+node_modules/
+.next/
+out/
+build/
+dist/
+.DS_Store
+
+# AI Models & Binaries (Heavy files)
+backend/models/*.onnx
+backend/models/*.json
+backend/piper/
+backend/outputs/*.wav
+backend/outputs/*.srt
+backend/models/clones/
+
+# Database
+backend/*.db
+backend/*.sqlite3
+
+# Agent Skills (Excluded by request)
+antigravity-awesome-skills/
+.gemini/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -1,0 +1,17 @@
+fastapi==0.109.0
+uvicorn==0.27.0
+sqlalchemy==2.0.25
+psycopg2-binary==2.9.9
+pydantic==2.5.3
+pydantic-settings==2.1.0
+celery==5.3.6
+redis==5.0.1
+python-multipart==0.0.6
+aiofiles==23.2.1
+# AI Libraries
+piper-tts==1.2.0
+faster-whisper==0.10.0
+numpy==1.26.3
+scipy==1.11.4
+librosa==0.10.1
+soundfile==0.12.1
