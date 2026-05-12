@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import os
+import re # System-wide re import
 import uuid
 from typing import List, Optional
 from database import get_db, init_db, Generation, Voice
@@ -18,10 +19,39 @@ OUTPUTS_DIR = os.path.join(BASE_DIR, "outputs")
 os.makedirs(OUTPUTS_DIR, exist_ok=True)
 app.mount("/outputs", StaticFiles(directory=OUTPUTS_DIR), name="outputs")
 
-# Initialize DB on startup
+# Initialize DB on startup and seed standard voices
 @app.on_event("startup")
 def startup_event():
     init_db()
+    db = next(get_db())
+    try:
+        # Standard voices to seed
+        standard_voices = [
+            {"id": "vi_VN-hoai_bao-medium", "name": "Hoài Bảo (Bắc)", "gender": "male", "accent": "Miền Bắc"},
+            {"id": "ngoc_huyen", "name": "Ngọc Huyền (Bắc)", "gender": "female", "accent": "Miền Bắc"},
+            {"id": "manh_dung", "name": "Mạnh Dũng (Bắc)", "gender": "male", "accent": "Miền Bắc"},
+            {"id": "thao_chi", "name": "Thảo Chi (Bắc)", "gender": "female", "accent": "Miền Bắc"},
+            {"id": "vi_VN-vivos-17k-low", "name": "Vivos Nữ (Nam)", "gender": "female", "accent": "Miền Nam"},
+        ]
+        
+        for v_data in standard_voices:
+            exists = db.query(Voice).filter(Voice.id == v_data["id"]).first()
+            if not exists:
+                new_voice = Voice(
+                    id=v_data["id"],
+                    name=v_data["name"],
+                    gender=v_data["gender"],
+                    accent=v_data["accent"],
+                    model_path=f"{v_data['id']}.onnx",
+                    is_cloned=False
+                )
+                db.add(new_voice)
+        db.commit()
+        print("Standard voice profiles seeded successfully.")
+    except Exception as e:
+        print(f"Error seeding voices: {e}")
+    finally:
+        db.close()
 
 # CORS configuration - More permissive for local dev
 app.add_middleware(
@@ -37,7 +67,8 @@ class GenerateRequest(BaseModel):
     text: str
     voice: str = "vi_VN-hoai_bao-medium"
     speed: float = 1.0
-    pitch: float = 1.0
+    pitch: Optional[float] = None
+    formant: Optional[float] = None
 
 class GenerationResponse(BaseModel):
     id: str
@@ -65,7 +96,7 @@ async def generate_voice(request: GenerateRequest, background_tasks: BackgroundT
     db.add(new_gen)
     db.commit()
 
-    background_tasks.add_task(generate_voice_task, task_id, request.text, request.voice, request.speed)
+    background_tasks.add_task(generate_voice_task, task_id, request.text, request.voice, request.speed, request.pitch, request.formant)
     return GenerationResponse(id=task_id, status="queued")
 
 @app.get("/task/{task_id}", response_model=GenerationResponse)
@@ -132,11 +163,32 @@ async def get_voices(db: Session = Depends(get_db)):
             {"id": "vi_VN-nam_minh-medium", "name": "Nam Minh", "gender": "male", "accent": "Miền Bắc", "is_cloned": False}
         ]
 
+@app.delete("/voice/{voice_id}")
+async def delete_voice(voice_id: str, db: Session = Depends(get_db)):
+    voice = db.query(Voice).filter(Voice.id == voice_id).first()
+    if not voice:
+        raise HTTPException(status_code=404, detail="Voice not found")
+    
+    if not voice.is_cloned:
+        raise HTTPException(status_code=403, detail="Cannot delete system voices")
+
+    try:
+        # Delete physical model if it exists (for future expansion)
+        # For now we just delete from DB as we use base models with morphing
+        db.delete(voice)
+        db.commit()
+        return {"message": "Voice deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/dub-srt", response_model=GenerationResponse)
 async def dub_srt(
     background_tasks: BackgroundTasks,
     voice: str = Form("vi_VN-hoai_bao-medium"),
     speed: float = Form(1.0),
+    pitch: Optional[float] = Form(None),
+    formant: Optional[float] = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
@@ -158,7 +210,7 @@ async def dub_srt(
     db.commit()
 
     from worker import dub_srt_task
-    background_tasks.add_task(dub_srt_task, task_id, srt_text, voice, speed)
+    background_tasks.add_task(dub_srt_task, task_id, srt_text, voice, speed, pitch, formant)
     return GenerationResponse(id=task_id, status="queued")
 
 @app.get("/generations")

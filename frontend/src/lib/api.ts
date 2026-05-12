@@ -28,18 +28,26 @@ export const ttsApi = {
     return response.data;
   },
   
-  generate: async (text: string, voiceId: string, speed: number): Promise<GenerationResponse> => {
+  generate: async (text: string, voiceId: string, speed: number, pitch?: number, formant?: number): Promise<GenerationResponse> => {
     // Backend expects 'voice', not 'voice_id' in GenerateRequest model
-    const response = await api.post("/generate", { text, voice: voiceId, speed });
+    const response = await api.post("/generate", { 
+      text, 
+      voice: voiceId, 
+      speed,
+      pitch,
+      formant
+    });
     return response.data;
   },
   
-  dubSrt: async (file: File, voiceId: string, speed: number): Promise<GenerationResponse> => {
+  dubSrt: async (file: File, voiceId: string, speed: number, pitch?: number, formant?: number): Promise<GenerationResponse> => {
     const formData = new FormData();
     formData.append("file", file);
     // Backend expects 'voice', not 'voice_id' in dub_srt Form fields
     formData.append("voice", voiceId);
     formData.append("speed", speed.toString());
+    if (pitch) formData.append("pitch", pitch.toString());
+    if (formant) formData.append("formant", formant.toString());
     
     const response = await api.post("/dub-srt", formData, {
       headers: { "Content-Type": "multipart/form-data" }
@@ -77,6 +85,10 @@ export const ttsApi = {
 
   deleteGeneration: async (taskId: string): Promise<void> => {
     await api.delete(`/task/${taskId}`);
+  },
+  
+  deleteVoice: async (voiceId: string): Promise<void> => {
+    await api.delete(`/voice/${voiceId}`);
   }
 };
 

@@ -23,12 +23,15 @@ export default function Home() {
   const [text, setText] = useState("");
   const [selectedVoice, setSelectedVoice] = useState("vi_VN-hoai_bao-medium");
   const [speed, setSpeed] = useState(1.0);
+  const [pitch, setPitch] = useState(1.0);
+  const [formant, setFormant] = useState(1.0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<GenerationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [voices, setVoices] = useState<Voice[]>([]);
   const [showCloneModal, setShowCloneModal] = useState(false);
   const [selectedCloneFile, setSelectedCloneFile] = useState<File | null>(null);
+  const [activeTab, setActiveTab] = useState<"text" | "srt">("text");
 
   // Fetch voices on mount
   useEffect(() => {
@@ -40,8 +43,8 @@ export default function Home() {
       } catch (err) {
         console.error("Failed to fetch voices", err);
         setVoices([
-          { id: "vi_VN-hoai_bao-medium", name: "Hoài Bảo", gender: "male", accent: "Miền Bắc" },
-          { id: "vi_VN-nam_minh-medium", name: "Nam Minh", gender: "male", accent: "Miền Bắc" },
+          { id: "vi_VN-hoai_bao-medium", name: "Hoài Bảo", gender: "male", accent: "Miền Bắc", is_cloned: false },
+          { id: "vi_VN-nam_minh-medium", name: "Nam Minh", gender: "male", accent: "Miền Bắc", is_cloned: false },
         ]);
       }
     };
@@ -80,7 +83,7 @@ export default function Home() {
     setResult(null);
 
     try {
-      const initialResponse = await ttsApi.generate(text, selectedVoice, speed);
+      const initialResponse = await ttsApi.generate(text, selectedVoice, speed, pitch, formant);
 
       // Polling for status
       const pollStatus = async (taskId: string) => {

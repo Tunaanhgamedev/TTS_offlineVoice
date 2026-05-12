@@ -22,6 +22,8 @@ export default function VoicesPage() {
   const [isCloning, setIsCloning] = useState(false);
   const [newVoice, setNewVoice] = useState({ name: "", gender: "female", accent: "Miền Bắc" });
   const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
 
   const fetchVoices = async () => {
     setIsLoading(true);
@@ -52,6 +54,49 @@ export default function VoicesPage() {
       alert("Lỗi khi nhân bản giọng nói.");
     } finally {
       setIsCloning(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Bạn có chắc chắn muốn xóa giọng nói này?")) return;
+    try {
+      await ttsApi.deleteVoice(id);
+      fetchVoices();
+    } catch (error) {
+      alert("Lỗi khi xóa giọng nói.");
+    }
+  };
+
+  const handlePlaySample = async (voice: Voice) => {
+    if (playingId === voice.id) {
+      audio?.pause();
+      setPlayingId(null);
+      return;
+    }
+
+    setPlayingId(voice.id);
+    try {
+      const sampleText = `Xin chào, tôi là ${voice.name}, một giọng nói AI được nhân bản thành công trên hệ thống Viet Voice A I.`;
+      const response = await ttsApi.generate(sampleText, voice.id, 1.0);
+      
+      // Poll for completion
+      let status = response.status;
+      let finalResponse = response;
+      while (status === "queued" || status === "processing") {
+        await new Promise(r => setTimeout(r, 1000));
+        finalResponse = await ttsApi.getTaskStatus(response.id);
+        status = finalResponse.status;
+      }
+
+      if (finalResponse.audio_url) {
+        const newAudio = new Audio(finalResponse.audio_url);
+        newAudio.onended = () => setPlayingId(null);
+        newAudio.play();
+        setAudio(newAudio);
+      }
+    } catch (error) {
+      console.error("Failed to play sample:", error);
+      setPlayingId(null);
     }
   };
 
@@ -123,11 +168,31 @@ export default function VoicesPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <button className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-muted hover:bg-primary/20 hover:text-primary transition-all font-medium text-sm">
-                        <Play size={16} /> Nghe thử
+                      <button 
+                        onClick={() => handlePlaySample(voice)}
+                        className={cn(
+                          "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl transition-all font-medium text-sm",
+                          playingId === voice.id ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-primary/20 hover:text-primary"
+                        )}
+                      >
+                        {playingId === voice.id ? (
+                           <>
+                             <div className="flex gap-1">
+                               <div className="w-1 h-3 bg-current animate-[bounce_1s_infinite_0ms]" />
+                               <div className="w-1 h-3 bg-current animate-[bounce_1s_infinite_200ms]" />
+                               <div className="w-1 h-3 bg-current animate-[bounce_1s_infinite_400ms]" />
+                             </div>
+                             Đang phát
+                           </>
+                        ) : (
+                          <><Play size={16} /> Nghe thử</>
+                        )}
                       </button>
                       {voice.is_cloned && (
-                        <button className="p-2.5 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all">
+                        <button 
+                          onClick={() => handleDelete(voice.id)}
+                          className="p-2.5 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all"
+                        >
                           <Trash2 size={18} />
                         </button>
                       )}
@@ -151,12 +216,15 @@ export default function VoicesPage() {
                 
                 <div className="space-y-6">
                   <div className="flex items-start gap-4 p-4 rounded-2xl bg-background/50 border border-border/50">
-                    <div className="p-2 rounded-lg bg-green-500/10 text-green-500"><Info size={20} /></div>
-                    <p className="text-sm">Chất lượng âm thanh càng tốt, giọng AI càng giống thật.</p>
+                    <div className="p-2 rounded-lg bg-green-500/10 text-green-500"><BadgeCheck size={20} /></div>
+                    <p className="text-sm">
+                      <span className="font-bold text-primary block mb-1">Mẹo hay:</span>
+                      Đặt tên giọng nói là <code className="bg-primary/10 px-1 rounded">Ngọc Huyền</code> hoặc <code className="bg-primary/10 px-1 rounded">Mạnh Dũng</code> để kích hoạt chế độ tối ưu Neural AI chuyên sâu.
+                    </p>
                   </div>
                   <div className="flex items-start gap-4 p-4 rounded-2xl bg-background/50 border border-border/50">
                     <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500"><Upload size={20} /></div>
-                    <p className="text-sm">Hỗ trợ các định dạng .mp3, .wav, .m4a.</p>
+                    <p className="text-sm">Hỗ trợ các định dạng .mp3, .wav, .m4a. Thời lượng khuyên dùng: 30-60 giây.</p>
                   </div>
                 </div>
               </div>

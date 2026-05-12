@@ -2,12 +2,13 @@ import os
 import time
 from database import SessionLocal, Generation, Voice
 from services.tts_service import tts_service
+from services.clone_service import clone_service
 from utils.text_norm import normalize_vietnamese_text
 
 from services.subtitle_service import subtitle_service
 from services.dubbing_service import dubbing_service
 
-def generate_voice_task(task_id: str, text: str, voice_id: str, speed: float):
+def generate_voice_task(task_id: str, text: str, voice_id: str, speed: float, pitch: float = None, formant: float = None):
     db = SessionLocal()
     generation = None
     try:
@@ -28,10 +29,19 @@ def generate_voice_task(task_id: str, text: str, voice_id: str, speed: float):
         # If voice_id is missing from DB, we still try to generate
         gender = voice_info.gender if voice_info else "male"
         voice_name = voice_info.name if voice_info else ""
-        audio_path = tts_service.generate(norm_text, voice_id, task_id, speed, gender=gender, voice_name=voice_name)
         
+        # ZERO-SHOT ROUTING: If it's a cloned voice, use the CloneService (F5-TTS) instead of Piper
+        if voice_info and getattr(voice_info, "is_cloned", False) and getattr(voice_info, "ref_audio_path", None):
+            audio_path = os.path.join("outputs", f"{task_id}.wav")
+            success = clone_service.generate_zero_shot(norm_text, voice_info.ref_audio_path, audio_path)
+            if not success:
+                raise Exception("Failed to generate Zero-Shot Voice Cloning. Please check terminal for F5-TTS installation instructions.")
+        else:
+            # Fallback to standard Piper TTS for built-in voices
+            audio_path = tts_service.generate(norm_text, voice_id, task_id, speed, gender=gender, voice_name=voice_name, pitch_override=pitch, formant_override=formant)
+            
         if not audio_path:
-            raise Exception("Failed to generate audio with Piper TTS")
+            raise Exception("Failed to generate audio")
         
         generation.audio_path = audio_path
         db.commit()
@@ -51,7 +61,7 @@ def generate_voice_task(task_id: str, text: str, voice_id: str, speed: float):
     finally:
         db.close()
 
-def dub_srt_task(task_id: str, srt_content: str, voice_id: str, speed: float):
+def dub_srt_task(task_id: str, srt_content: str, voice_id: str, speed: float, pitch: float = None, formant: float = None):
     db = SessionLocal()
     generation = None
     try:
@@ -67,7 +77,7 @@ def dub_srt_task(task_id: str, srt_content: str, voice_id: str, speed: float):
         voice_name = voice_info.name if voice_info else ""
 
         # 2. Process SRT and generate real audio using dubbing_service
-        audio_path = dubbing_service.process_srt(srt_content, voice_id, task_id, speed, gender=gender, voice_name=voice_name)
+        audio_path = dubbing_service.process_srt(srt_content, voice_id, task_id, speed, gender=gender, voice_name=voice_name, pitch_override=pitch, formant_override=formant)
         
         if not audio_path:
             raise Exception("Failed to process SRT dubbing")
