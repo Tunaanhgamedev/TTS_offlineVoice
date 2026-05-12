@@ -49,9 +49,9 @@ export default function HistoryPage() {
     try {
       await ttsApi.deleteGeneration(id);
       setHistory(prev => prev.filter(item => item.id !== id));
-    } catch (error) {
-      console.error("Failed to delete item:", error);
-      alert("Lỗi khi xóa bản ghi.");
+    } catch (error: any) {
+      console.error("DELETE ERROR:", error.response?.data || error.message);
+      alert(`Lỗi khi xóa bản ghi: ${error.response?.data?.detail || "Không rõ nguyên nhân"}`);
     }
   };
 

@@ -195,24 +195,36 @@ async def get_stats(db: Session = Depends(get_db)):
 
 @app.delete("/task/{task_id}")
 async def delete_task(task_id: str, db: Session = Depends(get_db)):
+    print(f"--- ATTEMPTING DELETE: {task_id} ---")
     gen = db.query(Generation).filter(Generation.id == task_id).first()
     if not gen:
-        raise HTTPException(status_code=404, detail="Task not found")
+        print(f"ERROR: Task {task_id} not found in database.")
+        raise HTTPException(status_code=404, detail="Task not found in database")
     
     # 1. Delete physical files
-    base_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "outputs", task_id)
+    # Use absolute path to avoid any confusion
+    outputs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "outputs")
+    
     for ext in [".wav", ".srt"]:
-        file_path = base_path + ext
+        file_path = os.path.join(outputs_dir, f"{task_id}{ext}")
         if os.path.exists(file_path):
             try:
+                print(f"Deleting file: {file_path}")
                 os.remove(file_path)
             except Exception as e:
-                print(f"Error deleting file {file_path}: {e}")
+                print(f"Could not delete physical file {file_path}: {e}")
+                # We continue anyway to delete the DB record
                 
     # 2. Delete from DB
-    db.delete(gen)
-    db.commit()
-    return {"message": "Task deleted successfully"}
+    try:
+        db.delete(gen)
+        db.commit()
+        print(f"SUCCESS: Task {task_id} deleted from database.")
+        return {"message": "Task deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        print(f"DATABASE ERROR: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
