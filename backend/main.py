@@ -193,6 +193,27 @@ async def get_stats(db: Session = Depends(get_db)):
         "total_characters": total_chars
     }
 
+@app.delete("/task/{task_id}")
+async def delete_task(task_id: str, db: Session = Depends(get_db)):
+    gen = db.query(Generation).filter(Generation.id == task_id).first()
+    if not gen:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    # 1. Delete physical files
+    base_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "outputs", task_id)
+    for ext in [".wav", ".srt"]:
+        file_path = base_path + ext
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception as e:
+                print(f"Error deleting file {file_path}: {e}")
+                
+    # 2. Delete from DB
+    db.delete(gen)
+    db.commit()
+    return {"message": "Task deleted successfully"}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

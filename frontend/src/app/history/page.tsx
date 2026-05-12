@@ -12,7 +12,8 @@ import {
   Search,
   RefreshCw,
   MoreVertical,
-  History
+  History,
+  Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +42,18 @@ export default function HistoryPage() {
     item.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.voice_id.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Bạn có chắc chắn muốn xóa bản ghi này?")) return;
+    
+    try {
+      await ttsApi.deleteGeneration(id);
+      setHistory(prev => prev.filter(item => item.id !== id));
+    } catch (error) {
+      console.error("Failed to delete item:", error);
+      alert("Lỗi khi xóa bản ghi.");
+    }
+  };
 
   return (
     <main className="flex min-h-screen bg-background text-foreground overflow-hidden">
@@ -120,9 +133,18 @@ export default function HistoryPage() {
                             {new Date(item.created_at).toLocaleString('vi-VN')}
                           </span>
                         </div>
-                        <button className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted transition-colors">
-                          <MoreVertical size={18} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button 
+                            onClick={() => handleDelete(item.id)}
+                            className="text-muted-foreground hover:text-red-500 p-1.5 rounded-lg hover:bg-red-500/10 transition-all"
+                            title="Xóa lịch sử"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                          <button className="text-muted-foreground hover:text-foreground p-1.5 rounded-lg hover:bg-muted transition-colors">
+                            <MoreVertical size={18} />
+                          </button>
+                        </div>
                       </div>
                       
                       <h3 className="font-medium text-lg mb-2 line-clamp-1">{item.text}</h3>

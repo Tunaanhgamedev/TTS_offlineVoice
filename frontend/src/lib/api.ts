@@ -73,6 +73,10 @@ export const ttsApi = {
   getStats: async (): Promise<any> => {
     const response = await api.get("/stats");
     return response.data;
+  },
+
+  deleteGeneration: async (taskId: string): Promise<void> => {
+    await api.delete(`/task/${taskId}`);
   }
 };
 
