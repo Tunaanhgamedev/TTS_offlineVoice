@@ -11,7 +11,8 @@ import {
   Mic2,
   Search,
   RefreshCw,
-  MoreVertical
+  MoreVertical,
+  History
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -88,9 +89,8 @@ export default function HistoryPage() {
               </div>
               <div>
                 <p className="text-lg font-medium">Chưa có dữ liệu lịch sử</p>
-                <p className="text-muted-foreground">Các bản chuyển đổi sẽ xuất hiện tại đây.</p>
               </div>
-            </button>
+            </div>
           ) : (
             <div className="grid gap-4">
               {filteredHistory.map((item) => (
@@ -134,23 +134,29 @@ export default function HistoryPage() {
                             <button 
                               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-all duration-300 text-sm font-medium"
                               onClick={() => {
-                                const audio = new Audio(`http://localhost:8000/outputs/${item.id}.wav`);
-                                audio.play();
+                                if (item.audio_url) {
+                                  const audio = new Audio(item.audio_url);
+                                  audio.play();
+                                }
                               }}
                             >
                               <Play size={16} /> Nghe lại
                             </button>
                             <a 
-                              href={`http://localhost:8000/outputs/${item.id}.wav`}
+                              href={item.audio_url}
                               download 
+                              target="_blank"
+                              rel="noopener noreferrer"
                               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 transition-all text-sm font-medium"
                             >
                               <Download size={16} /> Tải Audio
                             </a>
-                            {item.srt_path && (
+                            {item.srt_url && (
                               <a 
-                                href={`http://localhost:8000/outputs/${item.id}.srt`}
+                                href={item.srt_url}
                                 download 
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 transition-all text-sm font-medium"
                               >
                                 <FileText size={16} /> Tải SRT

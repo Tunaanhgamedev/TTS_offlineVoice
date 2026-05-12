@@ -10,9 +10,10 @@ import {
   Mic2,
   TrendingUp,
   Clock,
-  CheckCircle2,
-  Zap,
-  Award
+  CheckCircle2, 
+  Zap, 
+  Award,
+  RefreshCw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -166,4 +167,3 @@ function StatCard({ icon: Icon, label, value, color, sub }: any) {
   );
 }
 
-import { RefreshCw } from "lucide-react";

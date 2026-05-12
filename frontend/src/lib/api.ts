@@ -82,6 +82,6 @@ export interface HistoryItem {
   voice_id: string;
   status: string;
   created_at: string;
-  audio_path?: string;
-  srt_path?: string;
+  audio_url?: string;
+  srt_url?: string;
 }
