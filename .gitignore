@@ -23,6 +23,14 @@ backend/outputs/*.wav
 backend/outputs/*.srt
 backend/models/clones/
 
+# Virtual Environment
+.venv/
+venv/
+env/
+backend/.venv/
+backend/.venv_310/
+backend/.venv_311/
+
 # Database
 backend/*.db
 backend/*.sqlite3
