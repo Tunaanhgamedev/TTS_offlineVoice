@@ -67,6 +67,16 @@ export default function VoicesPage() {
     }
   };
 
+  const handleDeleteAll = async () => {
+    if (!confirm("Bạn có chắc chắn muốn xóa TẤT CẢ giọng clone? Thao tác này không thể hoàn tác!")) return;
+    try {
+      await ttsApi.deleteAllVoices();
+      fetchVoices();
+    } catch (error) {
+      alert("Lỗi khi xóa tất cả giọng clone.");
+    }
+  };
+
   const handlePlaySample = async (voice: Voice) => {
     if (playingId === voice.id) {
       audio?.pause();
@@ -132,6 +142,14 @@ export default function VoicesPage() {
               <h3 className="text-xl font-semibold flex items-center gap-2">
                 <Volume2 className="text-primary" size={24} /> Giọng nói hiện có
               </h3>
+              {voices.some(v => v.is_cloned) && (
+                <button 
+                  onClick={handleDeleteAll}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-destructive/10 text-destructive font-medium hover:bg-destructive hover:text-white transition-all text-sm"
+                >
+                  <Trash2 size={16} /> Xóa tất cả giọng clone
+                </button>
+              )}
             </div>
             
             {isLoading ? (

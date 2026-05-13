@@ -9,6 +9,17 @@ from typing import List, Optional
 from database import get_db, init_db, Generation, Voice
 from worker import generate_voice_task
 
+# --- SYSTEM CONFIGURATION ---
+# Route heavy AI model downloads to the I: drive to save C: drive space
+HF_DIR = r"I:\AppData_Backup\.cache\huggingface"
+TORCH_DIR = r"I:\AppData_Backup\.cache\torch"
+os.environ["HF_HOME"] = HF_DIR
+os.environ["TORCH_HOME"] = TORCH_DIR
+
+# Ensure these directories actually exist before F5-TTS tries to use them
+os.makedirs(HF_DIR, exist_ok=True)
+os.makedirs(TORCH_DIR, exist_ok=True)
+
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="VietVoiceAI API")
@@ -162,7 +173,24 @@ async def get_voices(db: Session = Depends(get_db)):
             {"id": "vi_VN-hoai_bao-medium", "name": "Hoài Bảo", "gender": "male", "accent": "Miền Bắc", "is_cloned": False},
             {"id": "vi_VN-nam_minh-medium", "name": "Nam Minh", "gender": "male", "accent": "Miền Bắc", "is_cloned": False}
         ]
-
+@app.delete("/voice/all")
+async def delete_all_cloned_voices(db: Session = Depends(get_db)):
+    try:
+        voices = db.query(Voice).filter(Voice.is_cloned == True).all()
+        for voice in voices:
+            # Delete physical reference audio if it exists
+            if getattr(voice, "ref_audio_path", None) and os.path.exists(voice.ref_audio_path):
+                try:
+                    os.remove(voice.ref_audio_path)
+                    print(f"Deleted physical ref audio: {voice.ref_audio_path}")
+                except Exception as e:
+                    print(f"Could not delete physical ref audio: {e}")
+            db.delete(voice)
+        db.commit()
+        return {"message": "All cloned voices deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 @app.delete("/voice/{voice_id}")
 async def delete_voice(voice_id: str, db: Session = Depends(get_db)):
     voice = db.query(Voice).filter(Voice.id == voice_id).first()
@@ -173,8 +201,14 @@ async def delete_voice(voice_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=403, detail="Cannot delete system voices")
 
     try:
-        # Delete physical model if it exists (for future expansion)
-        # For now we just delete from DB as we use base models with morphing
+        # Delete physical reference audio if it exists
+        if getattr(voice, "ref_audio_path", None) and os.path.exists(voice.ref_audio_path):
+            try:
+                os.remove(voice.ref_audio_path)
+                print(f"Deleted physical ref audio: {voice.ref_audio_path}")
+            except Exception as e:
+                print(f"Could not delete physical ref audio: {e}")
+                
         db.delete(voice)
         db.commit()
         return {"message": "Voice deleted successfully"}
@@ -244,6 +278,32 @@ async def get_stats(db: Session = Depends(get_db)):
         "total_voices": total_voices,
         "total_characters": total_chars
     }
+
+@app.delete("/task/all")
+async def delete_all_tasks(db: Session = Depends(get_db)):
+    print("--- ATTEMPTING DELETE ALL TASKS ---")
+    try:
+        gens = db.query(Generation).all()
+        outputs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "outputs")
+        
+        for gen in gens:
+            for ext in [".wav", ".srt"]:
+                file_path = os.path.join(outputs_dir, f"{gen.id}{ext}")
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                    except Exception as e:
+                        print(f"Could not delete physical file {file_path}: {e}")
+                        
+            db.delete(gen)
+            
+        db.commit()
+        print("SUCCESS: All tasks deleted from database.")
+        return {"message": "All tasks deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        print(f"DATABASE ERROR: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/task/{task_id}")
 async def delete_task(task_id: str, db: Session = Depends(get_db)):

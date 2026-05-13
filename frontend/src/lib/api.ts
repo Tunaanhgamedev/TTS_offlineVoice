@@ -86,9 +86,17 @@ export const ttsApi = {
   deleteGeneration: async (taskId: string): Promise<void> => {
     await api.delete(`/task/${taskId}`);
   },
+
+  deleteAllGenerations: async (): Promise<void> => {
+    await api.delete("/task/all");
+  },
   
   deleteVoice: async (voiceId: string): Promise<void> => {
     await api.delete(`/voice/${voiceId}`);
+  },
+
+  deleteAllVoices: async (): Promise<void> => {
+    await api.delete("/voice/all");
   }
 };
 

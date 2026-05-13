@@ -55,6 +55,18 @@ export default function HistoryPage() {
     }
   };
 
+  const handleDeleteAll = async () => {
+    if (!confirm("Bạn có chắc chắn muốn xóa TẤT CẢ bản ghi? Thao tác này không thể hoàn tác!")) return;
+    
+    try {
+      await ttsApi.deleteAllGenerations();
+      setHistory([]);
+    } catch (error: any) {
+      console.error("DELETE ALL ERROR:", error);
+      alert(`Lỗi khi xóa tất cả: ${error.message}`);
+    }
+  };
+
   return (
     <main className="flex min-h-screen bg-background text-foreground overflow-hidden">
       <Sidebar />
@@ -78,6 +90,14 @@ export default function HistoryPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
+            <button 
+              onClick={handleDeleteAll}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all text-sm font-medium ml-2"
+              title="Xóa tất cả"
+            >
+              <Trash2 size={18} />
+              <span className="hidden sm:inline">Xóa tất cả</span>
+            </button>
             <button 
               onClick={fetchHistory}
               className="p-2 rounded-xl hover:bg-muted transition-colors text-muted-foreground hover:text-primary"
