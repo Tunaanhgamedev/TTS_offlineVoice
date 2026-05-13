@@ -1,2 +1,16 @@
 === RUNNER STARTED ===
+PROGRESS:LOADING_LIBS
 Importing F5-TTS and PyTorch modules (lazy load)...
+Starting F5-TTS Generation on cpu
+PROGRESS:LOADING_VOCODER
+Loading vocoder...
+PROGRESS:LOADING_MODEL
+Loading model...
+Vocab file: I:\hf_cache\hub\models--SWivid--F5-TTS\snapshots\84e5a410d9cead4de2f847e7c9369a6440bdfaca\F5TTS_v1_Base\vocab.txt
+Ckpt file: I:\hf_cache\hub\models--SWivid--F5-TTS\snapshots\84e5a410d9cead4de2f847e7c9369a6440bdfaca\F5TTS_v1_Base\model_1250000.safetensors
+PROGRESS:PREPROCESSING
+Preprocessing audio (this may download Whisper if ref_text is empty)...
+PROGRESS:INFERRING
+Inferring audio (50 steps for better quality)...
+PROGRESS:SAVING
+SUCCESS: Saved to E:\VietVoiceAI\backend\outputs\4930859e-5957-402f-a95c-b91174e6ce34.wav

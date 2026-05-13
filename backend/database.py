@@ -21,6 +21,7 @@ class Voice(Base):
     preview_audio = Column(String, nullable=True)
     is_cloned = Column(Boolean, default=False)
     ref_audio_path = Column(String, nullable=True)
+    ref_text = Column(String, nullable=True)
 
 class Generation(Base):
     __tablename__ = "generations"

@@ -33,7 +33,8 @@ def generate_voice_task(task_id: str, text: str, voice_id: str, speed: float, pi
         # ZERO-SHOT ROUTING: If it's a cloned voice, use the CloneService (F5-TTS) instead of Piper
         if voice_info and getattr(voice_info, "is_cloned", False) and getattr(voice_info, "ref_audio_path", None):
             audio_path = os.path.join("outputs", f"{task_id}.wav")
-            success = clone_service.generate_zero_shot(norm_text, voice_info.ref_audio_path, audio_path)
+            ref_text = getattr(voice_info, "ref_text", "") or ""
+            success = clone_service.generate_zero_shot(norm_text, voice_info.ref_audio_path, audio_path, task_id, ref_text=ref_text)
             if not success:
                 raise Exception("Failed to generate Zero-Shot Voice Cloning. Please check terminal for F5-TTS installation instructions.")
         else:

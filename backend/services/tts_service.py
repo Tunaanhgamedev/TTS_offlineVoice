@@ -2,6 +2,7 @@ import os
 import subprocess
 import re
 from typing import Optional
+from services.linguistic_processor import VietnameseProcessor
 
 class TTSService:
     def __init__(self):
@@ -44,30 +45,14 @@ class TTSService:
 
     def normalize_text(self, text: str) -> str:
         """
-        Cleans text and applies a pronunciation dictionary for better naturalness.
+        Cleans text and applies VietnameseProcessor for premium naturalness.
         """
-        import re
-        # 1. Simple SSML tag removal/conversion
-        # Convert <break time="..."/> to a comma or ellipsis for natural pausing
+        # 1. SSML tag removal/conversion
         text = re.sub(r'<break[^>]*>', '...', text)
-        text = re.sub(r'<[^>]*>', '', text) # Remove other tags
+        text = re.sub(r'<[^>]*>', '', text) 
         
-        # 2. Pronunciation Dictionary (Common terms/Acronyms)
-        dictionary = {
-            "AI": "ây ai",
-            "TTS": "tê tê ét",
-            "Vbee": "vê bi",
-            "VN": "Việt Nam",
-            "HN": "Hà Nội",
-            "TP.HCM": "Thành phố Hồ Chí Minh",
-            "USD": "đô la mỹ",
-            "VND": "việt nam đồng"
-        }
-        
-        for key, val in dictionary.items():
-            # Use regex to match whole words only
-            pattern = r'\b' + re.escape(key) + r'\b'
-            text = re.sub(pattern, val, text, flags=re.IGNORECASE)
+        # 2. Use the central linguistic processor
+        text = VietnameseProcessor.normalize(text)
             
         return text
 

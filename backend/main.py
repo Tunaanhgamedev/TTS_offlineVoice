@@ -10,15 +10,25 @@ from database import get_db, init_db, Generation, Voice
 from worker import generate_voice_task
 
 # --- SYSTEM CONFIGURATION ---
-# Route heavy AI model downloads to the I: drive to save C: drive space
-HF_DIR = r"I:\AppData_Backup\.cache\huggingface"
-TORCH_DIR = r"I:\AppData_Backup\.cache\torch"
+# Use short paths on I: drive to save C: space and avoid Windows MAX_PATH issues
+HF_DIR = r"I:\hf_cache"
+TORCH_DIR = r"I:\pt_cache"
 os.environ["HF_HOME"] = HF_DIR
 os.environ["TORCH_HOME"] = TORCH_DIR
 
-# Ensure these directories actually exist before F5-TTS tries to use them
+# Ensure these directories exist
 os.makedirs(HF_DIR, exist_ok=True)
 os.makedirs(TORCH_DIR, exist_ok=True)
+
+# CRITICAL FIX: Disable wandb console capture which causes Errno 22 on Windows
+import sys
+sys.stdout = sys.__stdout__
+sys.stderr = sys.__stderr__
+
+os.environ["WANDB_MODE"] = "disabled"
+os.environ["WANDB_SILENT"] = "true"
+os.environ["WANDB_CONSOLE"] = "off"
+os.environ["PYTHONIOENCODING"] = "utf-8"
 
 from fastapi.staticfiles import StaticFiles
 
@@ -33,6 +43,11 @@ app.mount("/outputs", StaticFiles(directory=OUTPUTS_DIR), name="outputs")
 # Initialize DB on startup and seed standard voices
 @app.on_event("startup")
 def startup_event():
+    import sys
+    print(f"--- STARTING VIETVOICE AI ---")
+    print(f"Python Version: {sys.version}")
+    print(f"Executable Path: {sys.executable}")
+    print(f"-----------------------------")
     init_db()
     db = next(get_db())
     try:
@@ -139,11 +154,12 @@ async def clone_voice(
     name: str = Form(...),
     gender: str = Form(...),
     accent: str = Form(...),
+    ref_text: str = Form(""),
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
     try:
-        voice_id = clone_service.clone_voice(name, file.file, gender, accent)
+        voice_id = clone_service.clone_voice(name, file.file, gender, accent, ref_text)
         if not voice_id:
             raise HTTPException(status_code=500, detail="Failed to clone voice")
         return {"id": voice_id, "name": name}
@@ -153,6 +169,45 @@ async def clone_voice(
         except:
             print("Error cloning: [Unicode Error in Exception Message]")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+@app.delete("/voice/all")
+async def delete_all_voices(db: Session = Depends(get_db)):
+    """Delete all cloned voices and their reference audio files."""
+    try:
+        cloned_voices = db.query(Voice).filter(Voice.is_cloned == True).all()
+        for voice in cloned_voices:
+            if voice.ref_audio_path and os.path.exists(voice.ref_audio_path):
+                try:
+                    os.remove(voice.ref_audio_path)
+                except:
+                    pass
+            db.delete(voice)
+        db.commit()
+        return {"message": "All cloned voices deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/voice/{voice_id}")
+async def delete_voice(voice_id: str, db: Session = Depends(get_db)):
+    """Delete a specific cloned voice and its reference audio file."""
+    try:
+        voice = db.query(Voice).filter(Voice.id == voice_id).first()
+        if not voice:
+            raise HTTPException(status_code=404, detail="Voice not found")
+        
+        if voice.is_cloned and voice.ref_audio_path and os.path.exists(voice.ref_audio_path):
+            try:
+                os.remove(voice.ref_audio_path)
+            except:
+                pass
+        
+        db.delete(voice)
+        db.commit()
+        return {"message": f"Voice {voice_id} deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/voices")
 async def get_voices(db: Session = Depends(get_db)):

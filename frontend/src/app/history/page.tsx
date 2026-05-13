@@ -146,7 +146,8 @@ export default function HistoryPage() {
                             "bg-blue-500/10 text-blue-500 animate-pulse"
                           )}>
                             {item.status === "completed" ? "Hoàn thành" : 
-                             item.status === "failed" ? "Lỗi" : "Đang xử lý"}
+                             item.status === "failed" ? "Lỗi" : 
+                             item.status.startsWith("processing:") ? item.status.replace("processing: ", "") : "Đang xử lý"}
                           </span>
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
                             <Calendar size={12} />

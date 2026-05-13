@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Sidebar } from "@/components/Sidebar";
-import { TextEditor } from "@/components/TextEditor";
 import { VoiceSelector } from "@/components/VoiceSelector";
+import VoiceVisualizer from "@/components/VoiceVisualizer";
 import { 
   Play, 
   Settings2, 
@@ -14,10 +13,15 @@ import {
   FileText,
   Upload,
   Check,
-  AlertCircle
+  AlertCircle,
+  History,
+  Zap,
+  Volume2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ttsApi, GenerationResponse, Voice } from "@/lib/api";
+
+import { Sidebar } from "@/components/Sidebar";
 
 export default function Home() {
   const [text, setText] = useState("");
@@ -31,7 +35,8 @@ export default function Home() {
   const [voices, setVoices] = useState<Voice[]>([]);
   const [showCloneModal, setShowCloneModal] = useState(false);
   const [selectedCloneFile, setSelectedCloneFile] = useState<File | null>(null);
-  const [activeTab, setActiveTab] = useState<"text" | "srt">("text");
+  const [statusMessage, setStatusMessage] = useState<string>("Đang xử lý...");
+  const [history, setHistory] = useState<any[]>([]);
 
   // Fetch voices on mount
   useEffect(() => {
@@ -58,20 +63,36 @@ export default function Home() {
     const name = formData.get("name") as string;
     const gender = formData.get("gender") as string;
     const accent = formData.get("accent") as string;
+    const refText = formData.get("ref_text") as string;
 
     if (!file || !name) return;
 
     try {
       setIsGenerating(true);
-      await ttsApi.cloneVoice(file, name, gender, accent);
+      const newVoice = await ttsApi.cloneVoice(file, name, gender, accent, refText);
       const updatedVoices = await ttsApi.getVoices();
       setVoices(updatedVoices);
+      setSelectedVoice(newVoice.id); // Auto-select the new voice
       setShowCloneModal(false);
       setSelectedCloneFile(null);
       setIsGenerating(false);
     } catch (err) {
       alert("Lỗi khi nhân bản giọng nói");
       setIsGenerating(false);
+    }
+  };
+
+  const handleDeleteVoice = async (id: string) => {
+    if (!confirm("Bạn có chắc chắn muốn xóa giọng nói này?")) return;
+    try {
+      await ttsApi.deleteVoice(id);
+      const updatedVoices = await ttsApi.getVoices();
+      setVoices(updatedVoices);
+      if (selectedVoice === id && updatedVoices.length > 0) {
+        setSelectedVoice(updatedVoices[0].id);
+      }
+    } catch (err) {
+      alert("Lỗi khi xóa giọng nói");
     }
   };
 
@@ -89,8 +110,14 @@ export default function Home() {
       const pollStatus = async (taskId: string) => {
         try {
           const statusResponse = await ttsApi.getTaskStatus(taskId);
+          
+          if (statusResponse.status.startsWith("processing:")) {
+             setStatusMessage(statusResponse.status.replace("processing: ", ""));
+          }
+
           if (statusResponse.status === "completed") {
             setResult(statusResponse);
+            setHistory(prev => [{...statusResponse, text: text, created_at: new Date().toISOString()}, ...prev]);
             setIsGenerating(false);
           } else if (statusResponse.status === "failed") {
             setError(statusResponse.error_message || "Generation failed");
@@ -112,251 +139,316 @@ export default function Home() {
     }
   };
 
-  const [selectedSrtFile, setSelectedSrtFile] = useState<File | null>(null);
-
-  const handleSrtUpload = async (file: File) => {
-    setSelectedSrtFile(file);
-    setIsGenerating(true);
-    setError(null);
-    setResult(null);
-
-    try {
-      const initialResponse = await ttsApi.dubSrt(file, selectedVoice, speed);
-      
-      const pollStatus = async (taskId: string, retryCount = 0) => {
-        try {
-          const statusResponse = await ttsApi.getTaskStatus(taskId);
-          if (statusResponse.status === "completed") {
-            setResult(statusResponse);
-            setIsGenerating(false);
-            setSelectedSrtFile(null);
-          } else if (statusResponse.status === "failed") {
-            setError(statusResponse.error_message || "Xử lý SRT thất bại");
-            setIsGenerating(false);
-          } else {
-            // Wait and poll again
-            setTimeout(() => pollStatus(taskId), 2000);
-          }
-        } catch (err) {
-          if (retryCount < 3) {
-            // Retry if it's a temporary network glitch
-            setTimeout(() => pollStatus(taskId, retryCount + 1), 2000);
-          } else {
-            setError("Mất kết nối với Server khi đang xử lý. Hãy kiểm tra trạng thái Task.");
-            setIsGenerating(false);
-          }
-        }
-      };
-
-      pollStatus(initialResponse.id);
-    } catch (err) {
-      setError("Không thể nạp file SRT lên Server.");
-      setIsGenerating(false);
-    }
-  };
-
   return (
-    <main className="flex h-screen bg-background text-foreground overflow-hidden">
-      {/* 1. Sidebar */}
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar />
+      
+      <main className="flex-1 overflow-y-auto pb-20 selection:bg-primary selection:text-primary-foreground custom-scrollbar relative">
+        {/* Background Decorative Elements */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-secondary/10 rounded-full blur-[120px]" />
+          <div className="absolute bottom-[10%] right-[-5%] w-[30%] h-[30%] bg-primary/5 rounded-full blur-[100px]" />
+        </div>
 
-      {/* 2. Main Workspace */}
-      <div className="flex-1 flex flex-col overflow-hidden relative">
-        {/* Background Decoration */}
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 blur-[120px] rounded-full -mr-64 -mt-64" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-primary/5 blur-[100px] rounded-full -ml-32 -mb-32" />
-
-        <div className="flex-1 p-8 overflow-y-auto z-10">
-          <header className="mb-8 flex items-center justify-between">
-            <div>
-              <h2 className="text-3xl font-bold tracking-tight mb-2">Tạo Voice AI mới</h2>
-              <p className="text-muted-foreground">Chuyển đổi văn bản thành giọng đọc chuyên nghiệp với Piper & Whisper.</p>
+        {/* Header */}
+        <header className="border-b border-border/50 bg-background/50 backdrop-blur-xl sticky top-0 z-50">
+          <div className="container mx-auto px-6 h-20 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
+                <Volume2 className="text-primary-foreground" size={24} />
+              </div>
+              <div>
+                <h1 className="text-xl font-display font-bold tracking-tight">
+                  VietVoice<span className="text-primary">AI</span>
+                </h1>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 bg-primary/20 text-primary rounded-md border border-primary/20">PRO</span>
+                  <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Offline Studio V1.0</span>
+                </div>
+              </div>
             </div>
-            <button className="p-3 rounded-2xl bg-card border border-border/50 hover:border-primary/50 transition-all">
-              <Settings2 size={20} />
-            </button>
-          </header>
+            
+            <div className="flex items-center gap-6">
+              <button className="flex items-center gap-2 px-5 py-2.5 bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground rounded-full text-sm font-bold transition-all duration-300">
+                <Zap size={16} />
+                Upgrade Plan
+              </button>
+            </div>
+          </div>
+        </header>
 
-          <div className="grid grid-cols-12 gap-8 h-[calc(100%-120px)]">
-            <div className="col-span-12 lg:col-span-7 xl:col-span-8 flex flex-col gap-6">
-              <TextEditor 
-                value={text} 
-                onChange={setText} 
-                onSrtUpload={handleSrtUpload} 
-                selectedFileName={selectedSrtFile?.name}
+      <div className="container mx-auto px-6 pt-12">
+        <div className="grid grid-cols-12 gap-8">
+          
+          {/* Left Column: Input & Controls (Bento Style) */}
+          <div className="col-span-12 lg:col-span-7 space-y-8">
+            
+            {/* 1. Main Editor Card */}
+            <div className="glass rounded-[2rem] p-8 relative overflow-hidden group">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Sparkles size={16} className="text-primary" />
+                  </div>
+                  <h2 className="text-lg font-display font-bold">Studio Editor</h2>
+                </div>
+                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                  <span>{text.length} ký tự</span>
+                  <div className="w-1 h-1 rounded-full bg-border" />
+                  <span>Ước tính: {Math.ceil(text.length / 15)} giây</span>
+                </div>
+              </div>
+
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="Nhập nội dung bạn muốn chuyển thành giọng nói tại đây..."
+                className="w-full bg-transparent text-lg md:text-xl font-medium placeholder:text-muted-foreground/30 min-h-[320px] outline-none resize-none custom-scrollbar"
+              />
+
+              <div className="mt-8 flex flex-wrap items-center justify-between gap-4 pt-8 border-t border-border/30">
+                <div className="flex items-center gap-4">
+                  <VoiceVisualizer isActive={isGenerating} />
+                  {isGenerating && (
+                    <div className="flex items-center gap-2 px-4 py-2 bg-primary/5 rounded-full border border-primary/10">
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                      <span className="text-xs font-bold text-primary uppercase tracking-widest">{statusMessage}</span>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={handleGenerate}
+                  disabled={isGenerating || !text}
+                  className="relative group disabled:opacity-50"
+                >
+                  <div className="absolute -inset-0.5 bg-gradient-to-r from-primary to-secondary rounded-full blur opacity-50 group-hover:opacity-100 transition duration-1000 group-hover:duration-200" />
+                  <div className="relative flex items-center gap-3 px-10 py-4 bg-background rounded-full leading-none flex items-center divide-x divide-border/50">
+                    <span className="flex items-center gap-2 text-primary group-hover:text-primary transition duration-200 font-bold tracking-tight">
+                      {isGenerating ? "ĐANG XỬ LÝ..." : "BẮT ĐẦU GENERATE"}
+                    </span>
+                    <span className="pl-3 text-muted-foreground group-hover:text-primary transition duration-200">
+                      <Play size={18} />
+                    </span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* 2. Advanced Controls Card */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="glass-card rounded-[2rem] p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <Settings2 size={18} className="text-primary" />
+                  <h3 className="font-bold text-sm">Cấu hình âm thanh</h3>
+                </div>
+                
+                <div className="space-y-6">
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Tốc độ (Speed)</label>
+                      <span className="text-xs font-bold text-primary">{speed}x</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2.0"
+                      step="0.1"
+                      value={speed}
+                      onChange={(e) => setSpeed(parseFloat(e.target.value))}
+                      className="w-full accent-primary h-1.5 bg-border/40 rounded-full appearance-none cursor-pointer"
+                    />
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Cao độ (Pitch)</label>
+                      <span className="text-xs font-bold text-secondary">{pitch}x</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="1.5"
+                      step="0.05"
+                      value={pitch}
+                      onChange={(e) => setPitch(parseFloat(e.target.value))}
+                      className="w-full accent-secondary h-1.5 bg-border/40 rounded-full appearance-none cursor-pointer"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="glass-card rounded-[2rem] p-6 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <Sparkles size={18} className="text-accent" />
+                    <h3 className="font-bold text-sm">Trình tinh chỉnh (Formant)</h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Điều chỉnh Formant giúp giọng nói nghe "nữ tính" hoặc "nam tính" hơn mà không thay đổi cao độ gốc.
+                  </p>
+                </div>
+                
+                <div className="mt-6 space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Âm sắc</span>
+                    <span className="text-xs font-bold text-accent">V{formant}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.8"
+                    max="1.2"
+                    step="0.02"
+                    value={formant}
+                    onChange={(e) => setFormant(parseFloat(e.target.value))}
+                    className="w-full accent-accent h-1.5 bg-border/40 rounded-full appearance-none cursor-pointer"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Voices & History */}
+          <div className="col-span-12 lg:col-span-5 space-y-8">
+            
+            {/* Voice Selector Section */}
+            <div className="glass rounded-[2rem] h-[640px] flex flex-col">
+              <VoiceSelector 
+                voices={voices}
+                selectedId={selectedVoice} 
+                onSelect={setSelectedVoice} 
+                onClone={() => setShowCloneModal(true)}
+                onDelete={handleDeleteVoice}
               />
             </div>
 
-            {/* Right: Controls & Voice Selection */}
-            <div className="col-span-12 lg:col-span-5 xl:col-span-4 flex flex-col gap-8">
-              {/* Voice Selection Section */}
-              <section>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <Sparkles size={16} className="text-primary" />
-                    Chọn giọng đọc
-                  </h3>
-                  <button className="text-xs text-primary hover:underline flex items-center gap-1">
-                    Xem tất cả <ChevronRight size={12} />
-                  </button>
+            {/* Recent Tasks Card */}
+            <div className="glass-card rounded-[2rem] p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <History size={18} className="text-primary" />
+                  <h3 className="font-bold text-sm">Lịch sử gần đây</h3>
                 </div>
-                <div className="flex-1 overflow-hidden">
-                <VoiceSelector 
-                  voices={voices}
-                  selectedId={selectedVoice} 
-                  onSelect={setSelectedVoice} 
-                  onClone={() => setShowCloneModal(true)}
-                />
+                <button className="text-[10px] font-bold text-muted-foreground hover:text-primary transition-colors uppercase tracking-widest">
+                  Xem tất cả
+                </button>
               </div>
-              </section>
 
-              {/* Advanced Settings */}
-              <section className="p-6 rounded-3xl bg-card/20 border border-border/50 backdrop-blur-sm">
-                <h3 className="font-semibold mb-6 flex items-center gap-2">
-                  <Settings2 size={16} className="text-primary" />
-                  Cấu hình âm thanh
-                </h3>
-                
-                <div className="space-y-6">
-                  <div>
-                    <div className="flex justify-between text-xs mb-3 font-medium">
-                      <span className="text-muted-foreground">Tốc độ (Speed)</span>
-                      <span className="text-primary">{speed}x</span>
-                    </div>
-                    <input 
-                      type="range" 
-                      min="0.5" 
-                      max="2.0" 
-                      step="0.1" 
-                      value={speed}
-                      onChange={(e) => setSpeed(parseFloat(e.target.value))}
-                      className="w-full h-1.5 bg-muted rounded-full appearance-none cursor-pointer accent-primary"
-                    />
+              <div className="space-y-4 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
+                {history.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-muted-foreground italic">
+                    Chưa có lịch sử chuyển đổi nào...
                   </div>
-
-                  <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/30 border border-border/30">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                        <FileText size={16} />
-                      </div>
-                      <span className="text-sm font-medium">Tự động tạo Subtitle (SRT)</span>
-                    </div>
-                    <div className="w-10 h-5 bg-primary rounded-full relative">
-                       <div className="absolute right-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-sm" />
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-            {/* Generate Button */}
-              <button
-                onClick={handleGenerate}
-                disabled={!text || isGenerating}
-                className={cn(
-                  "mt-auto w-full py-5 rounded-3xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-300",
-                  isGenerating 
-                    ? "bg-muted text-muted-foreground cursor-wait" 
-                    : "bg-primary text-primary-foreground hover:scale-[1.02] shadow-xl shadow-primary/20 active:scale-95 disabled:opacity-50 disabled:grayscale"
-                )}
-              >
-                {isGenerating ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                    Đang xử lý...
-                  </>
                 ) : (
-                  <>
-                    <Play size={20} fill="currentColor" />
-                    BẮT ĐẦU GENERATE
-                  </>
+                  history.slice(0, 5).map((task) => (
+                    <div key={task.id} className="p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-primary/20 transition-all group">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-bold text-primary/70 uppercase tracking-tighter">TASK #{task.id.slice(0, 8)}</span>
+                        <span className="text-[10px] text-muted-foreground">{new Date(task.created_at).toLocaleTimeString("vi-VN")}</span>
+                      </div>
+                      <p className="text-xs font-medium line-clamp-1 text-foreground/80 mb-3">{task.text}</p>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-1.5 h-1.5 rounded-full ${task.status === 'completed' ? 'bg-green-500' : 'bg-amber-500'}`} />
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{task.status}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
                 )}
-              </button>
-
-              {error && (
-                <div className="mt-4 p-4 rounded-2xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-                  <AlertCircle size={18} className="shrink-0" />
-                  <p>{error}</p>
-                </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* 3. Output Section (Floating Bottom) */}
-        {result && (
-           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-4xl z-20 animate-in slide-in-from-bottom-8 duration-500">
-             <div className="glass-card p-6 rounded-[2rem] flex items-center justify-between gap-8">
-               <div className="flex items-center gap-4 flex-1">
-                 <div className="w-12 h-12 rounded-2xl bg-primary/20 flex items-center justify-center text-primary">
-                   <FileAudio size={24} />
-                 </div>
-                 <div className="flex-1">
-                   <p className="text-sm font-semibold truncate">Kết quả âm thanh - {result.id.slice(0, 8)}</p>
-                   <div className="flex items-center gap-2 mt-1">
-                      <audio controls className="h-8 w-full accent-primary" key={result.audio_url}>
-                        <source src={result.audio_url} type="audio/wav" />
-                      </audio>
-                   </div>
-                 </div>
+      {/* 3. Output Section (Floating Bottom) */}
+      {result && (
+         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-4xl z-50 animate-in slide-in-from-bottom-8 duration-500">
+           <div className="glass p-6 rounded-[2rem] flex items-center justify-between gap-8 border border-primary/20">
+             <div className="flex items-center gap-4 flex-1">
+               <div className="w-12 h-12 rounded-2xl bg-primary/20 flex items-center justify-center text-primary">
+                 <FileAudio size={24} />
                </div>
-               
-               <div className="flex items-center gap-3">
-                 {result.srt_url && (
-                   <a 
-                     href={result.srt_url}
-                     download
-                     className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-secondary text-secondary-foreground font-medium hover:bg-secondary/80 transition-colors"
-                   >
-                     <FileText size={18} />
-                     Tải SRT
-                   </a>
-                 )}
-                 <a 
-                   href={result.audio_url}
-                   download
-                   className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity shadow-lg shadow-primary/20"
-                 >
-                   <Download size={18} />
-                   Tải Audio
-                 </a>
+               <div className="flex-1">
+                 <p className="text-sm font-semibold truncate">Kết quả âm thanh - {result.id.slice(0, 8)}</p>
+                 <div className="flex items-center gap-2 mt-1">
+                    <audio controls className="h-8 w-full accent-primary" key={result.audio_url}>
+                      <source src={result.audio_url} type="audio/wav" />
+                    </audio>
+                 </div>
                </div>
              </div>
+             
+             <div className="flex items-center gap-3">
+               {result.srt_url && (
+                 <a 
+                   href={result.srt_url}
+                   download
+                   className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-secondary text-secondary-foreground font-medium hover:bg-secondary/80 transition-colors"
+                 >
+                   <FileText size={18} />
+                   Tải SRT
+                 </a>
+               )}
+               <a 
+                 href={result.audio_url}
+                 download
+                 className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity shadow-lg shadow-primary/20"
+               >
+                 <Download size={18} />
+                 Tải Audio
+               </a>
+             </div>
            </div>
-        )}
+         </div>
+      )}
 
-        {/* 4. Clone Voice Modal */}
-        {showCloneModal && (
-          <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-            <div className="glass-card p-8 rounded-[2.5rem] w-full max-w-md border border-primary/20 shadow-2xl shadow-primary/10 animate-in zoom-in-95 duration-300">
-              <h2 className="text-2xl font-bold mb-2">Nhân bản giọng mới</h2>
-              <p className="text-muted-foreground text-sm mb-6">Tải lên file mẫu (10-30s) để AI học âm sắc.</p>
-              
-              <form onSubmit={handleClone} className="space-y-4">
+      {/* 4. Clone Voice Modal */}
+      {showCloneModal && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="glass p-8 rounded-[2.5rem] w-full max-w-md border border-primary/20 shadow-2xl shadow-primary/10 animate-in zoom-in-95 duration-300">
+            <h2 className="text-2xl font-bold mb-2">Nhân bản giọng mới</h2>
+            <p className="text-muted-foreground text-sm mb-6">Tải lên file mẫu (10-30s) để AI học âm sắc.</p>
+            
+            <form onSubmit={handleClone} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground ml-1">TÊN GIỌNG ĐỌC</label>
+                <input name="name" required placeholder="VD: Ngọc Huyền Vbee" className="w-full bg-card/20 border border-border/50 rounded-2xl px-5 py-3 focus:border-primary outline-none transition-colors" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-muted-foreground ml-1">TÊN GIỌNG ĐỌC</label>
-                  <input name="name" required placeholder="VD: Ngọc Huyền Vbee" className="w-full bg-card/20 border border-border/50 rounded-2xl px-5 py-3 focus:border-primary outline-none transition-colors" />
+                  <label className="text-xs font-bold text-muted-foreground ml-1">GIỚI TÍNH</label>
+                  <select name="gender" className="w-full bg-card/20 border border-border/50 rounded-2xl px-5 py-3 focus:border-primary outline-none appearance-none">
+                    <option value="female">Nữ</option>
+                    <option value="male">Nam</option>
+                  </select>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground ml-1">GIỚI TÍNH</label>
-                    <select name="gender" className="w-full bg-card/20 border border-border/50 rounded-2xl px-5 py-3 focus:border-primary outline-none appearance-none">
-                      <option value="female">Nữ</option>
-                      <option value="male">Nam</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground ml-1">VÙNG MIỀN</label>
-                    <select name="accent" className="w-full bg-card/20 border border-border/50 rounded-2xl px-5 py-3 focus:border-primary outline-none appearance-none">
-                      <option value="Miền Bắc">Miền Bắc</option>
-                      <option value="Miền Nam">Miền Nam</option>
-                      <option value="Miền Trung">Miền Trung</option>
-                    </select>
-                  </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-muted-foreground ml-1">VÙNG MIỀN</label>
+                  <select name="accent" className="w-full bg-card/20 border border-border/50 rounded-2xl px-5 py-3 focus:border-primary outline-none appearance-none">
+                    <option value="Miền Bắc">Miền Bắc</option>
+                    <option value="Miền Nam">Miền Nam</option>
+                    <option value="Miền Trung">Miền Trung</option>
+                  </select>
                 </div>
+              </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-muted-foreground ml-1">FILE ÂM THANH MẪU (WAV/MP3)</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground ml-1">NỘI DUNG TRONG FILE MẪU (BẮT BUỘC)</label>
+                <textarea 
+                  name="ref_text" 
+                  placeholder="Nhập chính xác những gì người trong file âm thanh nói..." 
+                  className="w-full bg-card/20 border border-border/50 rounded-2xl px-5 py-3 focus:border-primary outline-none transition-colors min-h-[80px] text-sm resize-none"
+                  required
+                />
+                <p className="text-[10px] text-red-400 font-bold leading-tight bg-red-400/10 p-2 rounded-lg border border-red-400/20">
+                  ⚠️ QUAN TRỌNG: Chỉ nhập lời thoại CÓ TRONG FILE MẪU. Không nhập nội dung bạn muốn AI đọc vào đây.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground ml-1">FILE ÂM THANH MẪU (WAV/MP3)</label>
                   <label className={cn(
                     "flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-3xl cursor-pointer transition-all",
                     selectedCloneFile 
@@ -418,7 +510,7 @@ export default function Home() {
             </div>
           </div>
         )}
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

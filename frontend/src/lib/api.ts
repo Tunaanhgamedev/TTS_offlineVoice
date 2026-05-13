@@ -60,12 +60,13 @@ export const ttsApi = {
     return response.data;
   },
 
-  cloneVoice: async (file: File, name: string, gender: string, accent: string): Promise<{id: string, name: string}> => {
+  cloneVoice: async (file: File, name: string, gender: string, accent: string, refText: string = ""): Promise<{id: string, name: string}> => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("name", name);
     formData.append("gender", gender);
     formData.append("accent", accent);
+    formData.append("ref_text", refText);
     
     const response = await api.post("/clone-voice", formData, {
       headers: { "Content-Type": "multipart/form-data" }
